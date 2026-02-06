@@ -1,28 +1,16 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from sqlalchemy.orm import Session
 from models.user import User
-from pydantic import BaseModel,EmailStr
 from utils.db_instance import get_db
-from utils.security import create_access_token
+from utils.security import create_access_token,get_current_user
+from schemas.auth import UserCreate,UserResponse,TokenResponse
 import bcrypt
+from fastapi.security import OAuth2PasswordRequestForm
 
 router = APIRouter(
     prefix="/auth",
     tags=["Auth"]
 )
-
-class UserCreate(BaseModel):
-    username: str
-    email: EmailStr
-    password: str
-
-class UserResponse(BaseModel):
-    username: str
-    email: EmailStr
-
-    class Config:
-        orm_mode = True
-
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def register_user(user:UserCreate, db:Session=Depends(get_db)):
@@ -48,20 +36,11 @@ def register_user(user:UserCreate, db:Session=Depends(get_db)):
     
     return new_user
     
-     
-class UserLogin(BaseModel):
-    username: str
-    password: str
-
-class TokenResponse(BaseModel):
-    access_token:str
-    token_type: str = "bearer"
-    
     
 @router.post("/login", response_model=TokenResponse, status_code=status.HTTP_200_OK)
-def login_user(user: UserLogin,db: Session = Depends(get_db)):
+def login_user(form_data: OAuth2PasswordRequestForm = Depends(),db: Session = Depends(get_db)):
     db_user = db.query(User).filter(
-        (User.username == user.username)).first()
+        (User.username == form_data.username)).first()
     
     if not db_user:
         raise HTTPException(
@@ -69,7 +48,7 @@ def login_user(user: UserLogin,db: Session = Depends(get_db)):
             detail= 'User with this username does not exists'
         )
     
-    if not bcrypt.checkpw(user.password.encode('utf-8'), db_user.password.encode('utf-8')):
+    if not bcrypt.checkpw(form_data.password.encode('utf-8'), db_user.password.encode('utf-8')):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password"
@@ -83,3 +62,7 @@ def login_user(user: UserLogin,db: Session = Depends(get_db)):
     token = create_access_token(token_payload)
     
     return TokenResponse(access_token=token) 
+
+@router.get("/me", response_model=UserResponse)
+def get_details(current_user: User = Depends(get_current_user)):
+    return current_user
