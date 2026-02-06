@@ -34,7 +34,19 @@ def all_blogs(db: Session= Depends(get_db)):
     if not blogs:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            message="No blogs found"
+            detail="No blogs found"
+        )
+    
+    return blogs
+
+@router.get('/my-blogs',response_model=List[BlogResponse])
+def my_blogs(current_user: User = Depends(get_current_user),
+    db: Session= Depends(get_db)):
+    blogs = db.query(Blog).filter(Blog.user_id == current_user.id).all()
+    if not blogs:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No blogs found"
         )
     
     return blogs
